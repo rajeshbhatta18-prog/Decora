@@ -1,0 +1,959 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DECORA — AI Interior Design Pipeline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0f2436;
+    --ink-2:#15304a;
+    --ink-3:#3c5673;
+    --paper:#eaf0f4;
+    --paper-2:#ffffff;
+    --grid-line:rgba(60,110,150,0.16);
+    --brass:#c9a24a;
+    --brass-dark:#a3801f;
+    --sage:#5f8f68;
+    --sage-bg:#eaf3ec;
+    --rust:#b6543f;
+    --rust-bg:#fbebe8;
+    --muted:#5c7086;
+    --border:#d3dce3;
+    --font-display:'Space Grotesk', system-ui, sans-serif;
+    --font-body:'IBM Plex Sans', system-ui, sans-serif;
+    --font-mono:'IBM Plex Mono', 'Courier New', monospace;
+    --radius:8px;
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-font-smoothing:antialiased;}
+  body{
+    margin:0;
+    font-family:var(--font-body);
+    color:var(--ink);
+    background:
+      linear-gradient(var(--grid-line) 1px, transparent 1px) 0 0/28px 28px,
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px) 0 0/28px 28px,
+      var(--paper);
+    min-height:100vh;
+  }
+  a{color:inherit;}
+
+  /* ---------- title block ---------- */
+  .titleblock{
+    background:var(--ink);
+    color:var(--paper);
+    padding:18px 24px;
+    display:flex;
+    flex-wrap:wrap;
+    align-items:flex-end;
+    justify-content:space-between;
+    gap:14px;
+    border-bottom:3px solid var(--brass);
+  }
+  .titleblock h1{
+    font-family:var(--font-display);
+    font-size:1.5rem;
+    letter-spacing:0.04em;
+    margin:0;
+  }
+  .titleblock .sub{
+    font-size:0.82rem;
+    color:#b9c8d6;
+    margin-top:2px;
+  }
+  .stamp{
+    display:flex;
+    gap:18px;
+    font-family:var(--font-mono);
+    font-size:0.72rem;
+    color:#b9c8d6;
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+  }
+  .stamp div span{display:block;color:var(--paper);font-size:0.85rem;margin-top:2px;letter-spacing:0;}
+
+  /* ---------- connection strip ---------- */
+  .connstrip{
+    max-width:880px;
+    margin:18px auto 0;
+    padding:0 20px;
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:10px;
+    font-size:0.85rem;
+  }
+  .connstrip label{font-family:var(--font-mono); color:var(--muted); font-size:0.78rem;}
+  .connstrip input{
+    font-family:var(--font-mono);
+    font-size:0.82rem;
+    padding:6px 9px;
+    border:1px solid var(--border);
+    border-radius:5px;
+    background:var(--paper-2);
+    min-width:220px;
+  }
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block;margin-right:6px;flex-shrink:0;}
+  .dot.ok{background:var(--sage);}
+  .dot.bad{background:var(--rust);}
+  .connmsg{font-family:var(--font-mono); font-size:0.78rem; color:var(--muted);}
+
+  main{max-width:880px;margin:0 auto;padding:20px 20px 60px;}
+
+  /* ---------- stage cards ---------- */
+  .stage-card{
+    position:relative;
+    background:var(--paper-2);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:22px 24px;
+    margin-bottom:20px;
+    transition:opacity .2s ease, box-shadow .2s ease;
+  }
+  @media (prefers-reduced-motion: reduce){ .stage-card{transition:none;} }
+  .stage-card.locked{opacity:0.42; pointer-events:none; filter:grayscale(0.35);}
+  .stage-card.done{box-shadow:inset 3px 0 0 var(--sage);}
+  .stage-head{display:flex; align-items:flex-start; gap:14px; margin-bottom:14px;}
+  .stage-num{
+    font-family:var(--font-mono); font-weight:600; font-size:1rem;
+    width:2.3rem; height:2.3rem; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--ink); color:var(--paper); flex-shrink:0;
+  }
+  .stage-card.done .stage-num{background:var(--sage);}
+  .stage-title{font-family:var(--font-display); font-size:1.15rem; font-weight:600; margin:0;}
+  .stage-desc{font-family:var(--font-mono); font-size:0.74rem; color:var(--muted); margin-top:3px;}
+
+  /* ---------- form elements ---------- */
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  @media (max-width:560px){ .grid2{grid-template-columns:1fr;} }
+  .field{display:flex; flex-direction:column; gap:5px; margin-bottom:14px;}
+  .field label{font-size:0.78rem; font-weight:600; color:var(--ink-2);}
+  .field .hint{font-size:0.74rem; color:var(--muted); margin-top:2px;}
+  .field .hint.warn{color:var(--rust);}
+  input[type=number], input[type=text], select{
+    font-family:var(--font-body);
+    font-size:0.9rem;
+    padding:8px 10px;
+    border:1px solid var(--border);
+    border-radius:5px;
+    background:var(--paper-2);
+    color:var(--ink);
+  }
+  input:focus-visible, select:focus-visible, button:focus-visible, .chip:focus-visible{
+    outline:2px solid var(--brass-dark);
+    outline-offset:1px;
+  }
+
+  .chip-group{display:flex; flex-wrap:wrap; gap:8px;}
+  .chip{
+    font-family:var(--font-mono);
+    font-size:0.76rem;
+    padding:6px 12px;
+    border:1px solid var(--border);
+    border-radius:999px;
+    background:var(--paper-2);
+    cursor:pointer;
+    color:var(--ink-2);
+  }
+  .chip.active{background:var(--brass); border-color:var(--brass-dark); color:var(--ink); font-weight:600;}
+
+  .opening-row{display:grid; grid-template-columns:1.3fr 1fr 1fr auto; gap:8px; margin-bottom:8px; align-items:center;}
+  .chip-remove{
+    border:1px solid var(--border); background:var(--paper-2); border-radius:5px;
+    width:32px; height:32px; cursor:pointer; font-size:1rem; color:var(--rust); line-height:1;
+  }
+  .add-row-btn{
+    font-family:var(--font-mono); font-size:0.76rem; padding:6px 12px;
+    border:1px dashed var(--ink-3); background:transparent; border-radius:5px; cursor:pointer; color:var(--ink-2);
+  }
+
+  /* ---------- buttons ---------- */
+  .btn{
+    font-family:var(--font-body); font-weight:600; font-size:0.88rem;
+    padding:10px 18px; border-radius:6px; cursor:pointer; border:1px solid transparent;
+  }
+  .btn-primary{background:var(--brass); color:var(--ink); border-color:var(--brass-dark);}
+  .btn-primary:hover{background:var(--brass-dark);}
+  .btn-ghost{background:transparent; color:var(--ink-2); border-color:var(--ink-3);}
+  .btn-ghost:hover{background:var(--paper);}
+  .btn-danger-ghost{background:transparent; color:var(--rust); border-color:var(--rust);}
+  .btn:disabled{opacity:0.5; cursor:not-allowed;}
+  .btn-row{display:flex; gap:10px; flex-wrap:wrap; margin-top:6px;}
+
+  /* ---------- alerts ---------- */
+  .alert{padding:10px 14px; border-radius:6px; font-size:0.84rem; margin-top:10px;}
+  .alert-error{background:var(--rust-bg); color:#7a3527; border:1px solid #eac6bd;}
+  .alert-ok{background:var(--sage-bg); color:#2f5237; border:1px solid #c7ddc9;}
+  .alert-info{background:#eef3f8; color:var(--ink-2); border:1px solid var(--border);}
+  .alert ul{margin:6px 0 0 18px; padding:0;}
+
+  /* ---------- layout result ---------- */
+  .result-top{display:flex; gap:20px; flex-wrap:wrap; align-items:center; margin-bottom:16px;}
+  .ring{
+    --pct:0; width:88px; height:88px; border-radius:50%; position:relative; flex-shrink:0;
+    background:conic-gradient(var(--brass) calc(var(--pct)*1%), #e2e8ec 0);
+  }
+  .ring::before{content:''; position:absolute; inset:9px; background:var(--paper-2); border-radius:50%;}
+  .ring span{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-weight:700; font-size:1.05rem;}
+  .result-meta h3{margin:0 0 2px; font-family:var(--font-display); font-size:1.05rem;}
+  .result-meta .meta-line{font-family:var(--font-mono); font-size:0.78rem; color:var(--muted);}
+  .swatches{display:flex; gap:16px; margin-top:8px; font-size:0.78rem;}
+  .swatch{display:flex; align-items:center; gap:6px;}
+  .swatch .dotc{width:14px; height:14px; border-radius:3px; border:1px solid var(--border); display:inline-block;}
+
+  table.ftable{width:100%; border-collapse:collapse; font-size:0.84rem; margin-top:6px;}
+  table.ftable th{text-align:left; font-family:var(--font-mono); font-size:0.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.04em; padding:6px 8px; border-bottom:1px solid var(--border);}
+  table.ftable td{padding:7px 8px; border-bottom:1px solid #eef1f4;}
+  .mono{font-family:var(--font-mono);}
+
+  .blueprint-wrap{margin-top:16px; border:1px solid var(--border); border-radius:6px; background:var(--paper-2); padding:10px;}
+  .blueprint-svg{width:100%; height:auto; display:block;}
+  .bp-caption{font-family:var(--font-mono); font-size:0.7rem; color:var(--muted); margin-top:6px; text-align:center;}
+
+  .floorplan-img{width:100%; border:1px solid var(--border); border-radius:6px; display:block; margin-top:6px;}
+
+  .status-badge{
+    display:inline-block; font-family:var(--font-mono); font-size:0.74rem; text-transform:uppercase;
+    letter-spacing:0.04em; padding:4px 10px; border-radius:999px; margin-bottom:8px;
+  }
+  .status-ok{background:var(--sage-bg); color:#2f5237;}
+  .status-error{background:var(--rust-bg); color:#7a3527;}
+  .status-muted{background:#eef1f4; color:var(--muted);}
+  pre.mono-block{
+    background:var(--ink); color:#dce8f2; font-family:var(--font-mono); font-size:0.78rem;
+    padding:14px; border-radius:6px; overflow:auto; white-space:pre-wrap; word-break:break-word;
+  }
+
+  .summary-grid{display:grid; grid-template-columns:auto 1fr; gap:6px 14px; font-size:0.86rem;}
+  .summary-grid dt{color:var(--muted); font-family:var(--font-mono); font-size:0.74rem; align-self:center;}
+  .summary-grid dd{margin:0;}
+
+  details.jsonview{margin-top:14px;}
+  details.jsonview summary{cursor:pointer; font-family:var(--font-mono); font-size:0.78rem; color:var(--ink-2);}
+
+  footer{max-width:880px; margin:0 auto; padding:0 20px 40px; font-size:0.76rem; color:var(--muted);}
+  footer p{line-height:1.5;}
+</style>
+</head>
+<body>
+
+  <div class="titleblock">
+    <div>
+      <h1>DECORA</h1>
+      <div class="sub">AI Agent for Smart Interior Design — pipeline demo</div>
+    </div>
+    <div class="stamp">
+      <div>Sheet<span>01 / 06</span></div>
+      <div>Scale<span>NTS</span></div>
+      <div>Date<span id="stampDate">—</span></div>
+    </div>
+  </div>
+
+  <div class="connstrip">
+    <label for="apiBase">API endpoint</label>
+    <input id="apiBase" type="text" value="http://localhost:8000" spellcheck="false" />
+    <span><span class="dot" id="connDot"></span><span class="connmsg" id="connMsg">checking…</span></span>
+  </div>
+
+  <main>
+
+    <!-- ============ STAGE 1 : INPUT CAPTURE ============ -->
+    <section class="stage-card" id="card-1" data-num="01">
+      <div class="stage-head">
+        <div class="stage-num">01</div>
+        <div>
+          <h2 class="stage-title">Input Capture</h2>
+          <div class="stage-desc">room geometry &amp; preferences · models.py · RoomInput</div>
+        </div>
+      </div>
+
+      <form id="roomForm">
+        <div class="grid2">
+          <div class="field">
+            <label for="roomLength">Room length (ft)</label>
+            <input id="roomLength" type="number" step="0.1" min="0.1" value="10" required />
+          </div>
+          <div class="field">
+            <label for="roomWidth">Room width (ft)</label>
+            <input id="roomWidth" type="number" step="0.1" min="0.1" value="10" required />
+          </div>
+        </div>
+
+        <div class="grid2">
+          <div class="field">
+            <label for="roomType">Room type</label>
+            <select id="roomType">
+              <option value="bedroom" selected>Bedroom</option>
+              <option value="study">Study</option>
+              <option value="living_room">Living room</option>
+              <option value="studio">Studio</option>
+            </select>
+            <div class="hint warn" id="roomTypeHint" hidden>⚠ The seeded dataset currently only contains bedroom layouts — other room types will return no matches.</div>
+          </div>
+          <div class="field">
+            <label for="style">Style</label>
+            <select id="style">
+              <option value="minimalist" selected>Minimalist</option>
+              <option value="luxury">Luxury</option>
+              <option value="budget">Budget</option>
+              <option value="student">Student</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="budget">Budget (NPR)</label>
+          <input id="budget" type="number" step="1000" min="0" value="100000" placeholder="e.g. 100000" />
+        </div>
+
+        <div class="field">
+          <label>Required furniture</label>
+          <div class="chip-group" id="furnitureChips"></div>
+          <div class="hint">Tap to select — the Layout Engine scores how well each candidate layout covers these.</div>
+        </div>
+
+        <div class="field">
+          <label>Doors</label>
+          <div id="doorsContainer"></div>
+          <button type="button" class="add-row-btn" id="btnAddDoor">+ Add door</button>
+        </div>
+
+        <div class="field">
+          <label>Windows</label>
+          <div id="windowsContainer"></div>
+          <button type="button" class="add-row-btn" id="btnAddWindow">+ Add window</button>
+        </div>
+
+        <div class="btn-row">
+          <button type="submit" class="btn btn-primary" id="btnGenerate">Generate layout →</button>
+        </div>
+        <div class="alert alert-error" id="formError" hidden></div>
+      </form>
+    </section>
+
+    <!-- ============ STAGE 2 : LAYOUT ENGINE ============ -->
+    <section class="stage-card locked" id="card-2" data-num="02">
+      <div class="stage-head">
+        <div class="stage-num">02</div>
+        <div>
+          <h2 class="stage-title">Layout Engine</h2>
+          <div class="stage-desc">matched against the seeded dataset · layout_engine.py</div>
+        </div>
+      </div>
+
+      <div class="result-top">
+        <div class="ring" id="matchRing"><span id="matchPct">0%</span></div>
+        <div class="result-meta">
+          <h3 id="layoutName">—</h3>
+          <div class="meta-line">Style: <span id="layoutStyle">—</span> · Estimated cost: <span id="estCost">—</span></div>
+          <div class="swatches">
+            <span class="swatch"><span class="dotc" id="wallColorDot"></span>Wall: <span id="wallColorLabel">—</span></span>
+            <span class="swatch"><span class="dotc" id="accentColorDot"></span>Accent: <span id="accentColorLabel">—</span></span>
+          </div>
+        </div>
+      </div>
+
+      <table class="ftable">
+        <thead><tr><th>Item</th><th>Position (x, y ft)</th><th>Size</th></tr></thead>
+        <tbody id="furnitureTableBody"></tbody>
+      </table>
+
+      <div class="alert" id="warningsBox" hidden></div>
+
+      <div class="blueprint-wrap">
+        <div id="blueprintPreview"></div>
+        <div class="bp-caption">Live preview — drawn from the layout coordinates, before a floor plan is generated</div>
+      </div>
+    </section>
+
+    <!-- ============ STAGE 3 : FEEDBACK CORE ============ -->
+    <section class="stage-card locked" id="card-3" data-num="03">
+      <div class="stage-head">
+        <div class="stage-num">03</div>
+        <div>
+          <h2 class="stage-title">Feedback Core</h2>
+          <div class="stage-desc">revise or accept the suggestion · main.py · /modify · /accept</div>
+        </div>
+      </div>
+
+      <p class="stage-desc" style="margin-bottom:12px;">Option A — Modify</p>
+      <div class="grid2">
+        <div class="field">
+          <label for="modStyle">Style</label>
+          <select id="modStyle">
+            <option value="minimalist">Minimalist</option>
+            <option value="luxury">Luxury</option>
+            <option value="budget">Budget</option>
+            <option value="student">Student</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="modBudget">Budget (NPR)</label>
+          <input id="modBudget" type="number" step="1000" min="0" />
+        </div>
+      </div>
+      <div class="field">
+        <label>Required furniture</label>
+        <div class="chip-group" id="modFurnitureChips"></div>
+      </div>
+      <div class="btn-row">
+        <button type="button" class="btn btn-ghost" id="btnModify">Apply changes</button>
+      </div>
+      <div class="alert alert-error" id="modifyError" hidden></div>
+
+      <hr style="border:none; border-top:1px solid var(--border); margin:20px 0;" />
+
+      <p class="stage-desc" style="margin-bottom:12px;">Option B — Accept</p>
+      <div class="btn-row">
+        <button type="button" class="btn btn-primary" id="btnAccept">Accept layout →</button>
+      </div>
+    </section>
+
+    <!-- ============ STAGE 4 : 2D VISUALIZATION ============ -->
+    <section class="stage-card locked" id="card-4" data-num="04">
+      <div class="stage-head">
+        <div class="stage-num">04</div>
+        <div>
+          <h2 class="stage-title">2D Visualization &amp; Verification</h2>
+          <div class="stage-desc">rendered floor plan · visualization.py</div>
+        </div>
+      </div>
+
+      <div id="floorplanWrap" hidden>
+        <img class="floorplan-img" id="floorplanImg" alt="Generated 2D floor plan" />
+      </div>
+
+      <div class="btn-row">
+        <button type="button" class="btn btn-primary" id="btnApprove">Approve floor plan →</button>
+        <button type="button" class="btn btn-danger-ghost" id="btnReject">Request changes</button>
+      </div>
+      <div class="alert alert-error" id="verifyError" hidden></div>
+    </section>
+
+    <!-- ============ STAGE 5 : 3D UPSCALING ============ -->
+    <section class="stage-card locked" id="card-5" data-num="05">
+      <div class="stage-head">
+        <div class="stage-num">05</div>
+        <div>
+          <h2 class="stage-title">3D Upscaling</h2>
+          <div class="stage-desc">prompt handoff to an external render provider · ai_render.py</div>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button type="button" class="btn btn-primary" id="btnRender3d">Generate 3D render →</button>
+      </div>
+      <div class="alert alert-error" id="render3dError" hidden></div>
+      <div id="renderPromptWrap" hidden>
+        <p class="stage-desc" style="margin:14px 0 6px;">Generated prompt</p>
+        <pre class="mono-block" id="renderPrompt"></pre>
+      </div>
+      <div id="renderResult" style="margin-top:12px;"></div>
+    </section>
+
+    <!-- ============ STAGE 6 : FINAL OUTPUT ============ -->
+    <section class="stage-card locked" id="card-6" data-num="06">
+      <div class="stage-head">
+        <div class="stage-num">06</div>
+        <div>
+          <h2 class="stage-title">Final Output</h2>
+          <div class="stage-desc">completed session record · main.py · GET /api/design/{id}</div>
+        </div>
+      </div>
+
+      <div id="finalSummary"></div>
+
+      <details class="jsonview">
+        <summary>View raw session JSON</summary>
+        <pre class="mono-block" id="rawJson"></pre>
+      </details>
+
+      <div class="btn-row" style="margin-top:16px;">
+        <button type="button" class="btn btn-ghost" id="btnReset">Start new design</button>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <p><strong>Dataset:</strong> <span id="datasetNote">—</span></p>
+    <p>Note: the repository also contains a separate scikit-learn furniture predictor (<code>model.py</code> / <code>retrain.py</code>), but it isn't wired into any endpoint in <code>main.py</code> yet — this UI talks to the dataset-driven Layout Engine (<code>layout_engine.py</code>) via the six-stage pipeline above.</p>
+  </footer>
+
+<script>
+(function(){
+  "use strict";
+
+  const FURNITURE_OPTIONS = ['bed','single_bed','wardrobe','dresser','desk','chair','bookshelf','nightstand','side_table','rug','night_lamp','study_lamp'];
+  const DEFAULT_FURNITURE = ['bed','wardrobe'];
+  const WALLS = [['north','North (top)'],['south','South (bottom)'],['west','West (left)'],['east','East (right)']];
+  const STAGE_RANK = { layout:2, visualization:3, verified:4, complete:5 };
+  const COLOR_HEX = {
+    'Neutral White':'#f2efe9', 'Sage Green':'#9caf88', 'Deep Charcoal':'#2b2b2b',
+    'Brushed Gold':'#c9a24a', 'Off White':'#f4f1ea', 'Slate Blue':'#5b7c99',
+    'Light Grey':'#c7cdd1', 'Teal':'#2a7f7f', 'Warm Wood':'#a9784f'
+  };
+
+  let session = null; // last full SessionState from the server
+
+  /* ---------------- helpers ---------------- */
+  function $(id){ return document.getElementById(id); }
+  function apiBase(){ return $('apiBase').value.trim().replace(/\/+$/,''); }
+
+  async function api(path, opts){
+    opts = opts || {};
+    const res = await fetch(apiBase() + path, Object.assign({
+      headers: {'Content-Type':'application/json'}
+    }, opts));
+    let data = null;
+    try { data = await res.json(); } catch(e){ /* no body */ }
+    if(!res.ok){
+      const msg = (data && data.detail) ? data.detail : ('Request failed (' + res.status + ')');
+      throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    }
+    return data;
+  }
+
+  function escapeHtml(str){
+    return String(str).replace(/[&<>"']/g, function(s){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s];
+    });
+  }
+
+  function formatNpr(v){
+    if(v === null || v === undefined) return '—';
+    return 'NPR ' + Number(v).toLocaleString('en-IN');
+  }
+
+  function setLoading(id, isLoading){
+    const btn = $(id);
+    if(!btn.dataset.originalText) btn.dataset.originalText = btn.textContent;
+    btn.disabled = isLoading;
+    btn.textContent = isLoading ? 'Working…' : btn.dataset.originalText;
+  }
+
+  function showError(id, msg){
+    const el = $(id);
+    el.className = 'alert alert-error';
+    el.textContent = msg;
+    el.hidden = false;
+  }
+  function showInfo(id, msg){
+    const el = $(id);
+    el.className = 'alert alert-info';
+    el.textContent = msg;
+    el.hidden = false;
+  }
+  function clearAlert(id){
+    const el = $(id);
+    el.hidden = true;
+    el.textContent = '';
+  }
+
+  function prefersReducedMotion(){
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+  function scrollToCard(id){
+    $(id).scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth', block: 'start' });
+  }
+
+  function setUnlocked(cardId, unlocked){
+    $(cardId).classList.toggle('locked', !unlocked);
+  }
+  function markDone(cardId, done){
+    const card = $(cardId);
+    card.classList.toggle('done', done);
+    const badge = card.querySelector('.stage-num');
+    badge.textContent = done ? '✓' : card.dataset.num;
+  }
+
+  /* ---------------- chips ---------------- */
+  function renderChipOptions(containerId, active){
+    const container = $(containerId);
+    container.innerHTML = FURNITURE_OPTIONS.map(function(v){
+      const isActive = active.indexOf(v) !== -1;
+      return '<button type="button" class="chip' + (isActive ? ' active' : '') + '" data-value="' + v + '">' + v.replace(/_/g,' ') + '</button>';
+    }).join('');
+    container.querySelectorAll('.chip').forEach(function(chip){
+      chip.addEventListener('click', function(){ chip.classList.toggle('active'); });
+    });
+  }
+  function readChips(containerId){
+    return Array.prototype.slice.call($(containerId).querySelectorAll('.chip.active')).map(function(c){ return c.dataset.value; });
+  }
+  function setChips(containerId, values){
+    $(containerId).querySelectorAll('.chip').forEach(function(chip){
+      chip.classList.toggle('active', values.indexOf(chip.dataset.value) !== -1);
+    });
+  }
+
+  /* ---------------- door / window rows ---------------- */
+  function addOpeningRow(containerId, defaults){
+    defaults = defaults || { wall:'north', position:0, width:3 };
+    const container = $(containerId);
+    const row = document.createElement('div');
+    row.className = 'opening-row';
+    row.innerHTML =
+      '<select class="op-wall">' + WALLS.map(function(w){
+        return '<option value="' + w[0] + '"' + (w[0] === defaults.wall ? ' selected' : '') + '>' + w[1] + '</option>';
+      }).join('') + '</select>' +
+      '<input type="number" class="op-position" step="0.1" min="0" value="' + defaults.position + '" placeholder="pos (ft)" />' +
+      '<input type="number" class="op-width" step="0.1" min="0.1" value="' + defaults.width + '" placeholder="width (ft)" />' +
+      '<button type="button" class="chip-remove" aria-label="Remove">×</button>';
+    row.querySelector('.chip-remove').addEventListener('click', function(){ row.remove(); });
+    container.appendChild(row);
+  }
+  function readOpenings(containerId){
+    return Array.prototype.slice.call($(containerId).querySelectorAll('.opening-row')).map(function(row){
+      return {
+        wall: row.querySelector('.op-wall').value,
+        position: parseFloat(row.querySelector('.op-position').value) || 0,
+        width: parseFloat(row.querySelector('.op-width').value) || 3
+      };
+    });
+  }
+
+  /* ---------------- blueprint preview (SVG) ---------------- */
+  function furnitureBlock(f, W, fontSize){
+    const svgY = W - f.y - f.h;
+    const cx = f.x + f.w / 2, cy = svgY + f.h / 2;
+    const label = f.name.replace(/_/g, ' ');
+    return '<g>' +
+      '<rect x="' + f.x + '" y="' + svgY + '" width="' + f.w + '" height="' + f.h +
+        '" fill="var(--brass)" fill-opacity="0.2" stroke="var(--ink)" stroke-width="0.045" vector-effect="non-scaling-stroke"/>' +
+      '<text x="' + cx + '" y="' + (cy - fontSize * 0.25) + '" text-anchor="middle" font-size="' + fontSize + '" font-family="var(--font-mono)" fill="var(--ink)">' + escapeHtml(label) + '</text>' +
+      '<text x="' + cx + '" y="' + (cy + fontSize * 0.95) + '" text-anchor="middle" font-size="' + (fontSize * 0.8) + '" font-family="var(--font-mono)" fill="var(--muted)">' + f.w.toFixed(1) + '×' + f.h.toFixed(1) + '</text>' +
+      '</g>';
+  }
+
+  function openingLine(o, L, W, kind){
+    const stroke = kind === 'door' ? 'var(--rust)' : 'var(--ink-3)';
+    let x1, y1, x2, y2;
+    if(o.wall === 'north'){ x1 = o.position; x2 = o.position + o.width; y1 = y2 = 0; }
+    else if(o.wall === 'south'){ x1 = o.position; x2 = o.position + o.width; y1 = y2 = W; }
+    else if(o.wall === 'west'){ x1 = x2 = 0; y1 = W - o.position; y2 = W - (o.position + o.width); }
+    else { x1 = x2 = L; y1 = W - o.position; y2 = W - (o.position + o.width); }
+    return '<line x1="' + x1 + '" y1="' + y1 + '" x2="' + x2 + '" y2="' + y2 +
+      '" stroke="' + stroke + '" stroke-width="0.14" stroke-linecap="round" vector-effect="non-scaling-stroke"/>';
+  }
+
+  function dimensions(L, W, pad, fontSize){
+    const yTop = -pad * 0.35;
+    const xLeft = -pad * 0.35;
+    return (
+      '<line x1="0" y1="' + yTop + '" x2="' + L + '" y2="' + yTop + '" stroke="var(--muted)" stroke-width="0.03" vector-effect="non-scaling-stroke"/>' +
+      '<line x1="0" y1="' + (yTop - 0.15) + '" x2="0" y2="' + (yTop + 0.15) + '" stroke="var(--muted)" stroke-width="0.03" vector-effect="non-scaling-stroke"/>' +
+      '<line x1="' + L + '" y1="' + (yTop - 0.15) + '" x2="' + L + '" y2="' + (yTop + 0.15) + '" stroke="var(--muted)" stroke-width="0.03" vector-effect="non-scaling-stroke"/>' +
+      '<text x="' + (L/2) + '" y="' + (yTop - 0.25) + '" text-anchor="middle" font-size="' + fontSize + '" font-family="var(--font-mono)" fill="var(--muted)">' + L.toFixed(1) + ' ft</text>' +
+      '<line x1="' + xLeft + '" y1="0" x2="' + xLeft + '" y2="' + W + '" stroke="var(--muted)" stroke-width="0.03" vector-effect="non-scaling-stroke"/>' +
+      '<line x1="' + (xLeft - 0.15) + '" y1="0" x2="' + (xLeft + 0.15) + '" y2="0" stroke="var(--muted)" stroke-width="0.03" vector-effect="non-scaling-stroke"/>' +
+      '<line x1="' + (xLeft - 0.15) + '" y1="' + W + '" x2="' + (xLeft + 0.15) + '" y2="' + W + '" stroke="var(--muted)" stroke-width="0.03" vector-effect="non-scaling-stroke"/>' +
+      '<text x="' + (xLeft - 0.3) + '" y="' + (W/2) + '" text-anchor="middle" font-size="' + fontSize + '" font-family="var(--font-mono)" fill="var(--muted)" transform="rotate(-90 ' + (xLeft - 0.3) + ' ' + (W/2) + ')">' + W.toFixed(1) + ' ft</text>'
+    );
+  }
+
+  function drawBlueprint(container, room, layout){
+    const L = room.length, W = room.width;
+    const pad = Math.max(L, W) * 0.2 + 1;
+    const fontSize = Math.max(0.28, Math.min(L, W) * 0.045);
+    const vbX = -pad, vbY = -pad, vbW = L + 2 * pad, vbH = W + 2 * pad;
+
+    const furniture = (layout.furniture || []).map(function(f){ return furnitureBlock(f, W, fontSize); }).join('');
+    const doors = (room.doors || []).map(function(d){ return openingLine(d, L, W, 'door'); }).join('');
+    const windows = (room.windows || []).map(function(w){ return openingLine(w, L, W, 'window'); }).join('');
+
+    container.innerHTML =
+      '<svg viewBox="' + vbX + ' ' + vbY + ' ' + vbW + ' ' + vbH + '" class="blueprint-svg" role="img" aria-label="Floor plan preview">' +
+        '<defs><pattern id="bpgrid" width="1" height="1" patternUnits="userSpaceOnUse">' +
+          '<path d="M 1 0 L 0 0 0 1" fill="none" stroke="var(--grid-line)" stroke-width="0.02"/>' +
+        '</pattern></defs>' +
+        '<rect x="' + vbX + '" y="' + vbY + '" width="' + vbW + '" height="' + vbH + '" fill="url(#bpgrid)"/>' +
+        '<rect x="0" y="0" width="' + L + '" height="' + W + '" fill="none" stroke="var(--ink)" stroke-width="0.09" vector-effect="non-scaling-stroke"/>' +
+        furniture + doors + windows +
+        dimensions(L, W, pad, fontSize) +
+      '</svg>';
+  }
+
+  /* ---------------- render stage 2 results ---------------- */
+  function setColorDot(id, name){
+    $(id).style.background = COLOR_HEX[name] || '#9aa7b0';
+  }
+
+  function renderLayoutResults(layout, room){
+    $('layoutName').textContent = layout.name;
+    $('layoutStyle').textContent = layout.style;
+    const pct = Math.round((layout.match_score || 0) * 100);
+    $('matchRing').style.setProperty('--pct', pct);
+    $('matchPct').textContent = pct + '%';
+    $('estCost').textContent = formatNpr(layout.estimated_cost);
+
+    setColorDot('wallColorDot', layout.wall_color);
+    $('wallColorLabel').textContent = layout.wall_color;
+    setColorDot('accentColorDot', layout.accent_color);
+    $('accentColorLabel').textContent = layout.accent_color;
+
+    const tbody = $('furnitureTableBody');
+    tbody.innerHTML = (layout.furniture || []).map(function(f){
+      return '<tr><td>' + escapeHtml(f.name.replace(/_/g,' ')) + '</td>' +
+        '<td class="mono">' + f.x.toFixed(1) + ', ' + f.y.toFixed(1) + '</td>' +
+        '<td class="mono">' + f.w.toFixed(1) + ' × ' + f.h.toFixed(1) + ' ft</td></tr>';
+    }).join('') || '<tr><td colspan="3">No furniture placed.</td></tr>';
+
+    const warn = $('warningsBox');
+    warn.hidden = false;
+    if(layout.warnings && layout.warnings.length){
+      warn.className = 'alert alert-error';
+      warn.innerHTML = '<strong>Clearance warnings</strong><ul>' + layout.warnings.map(function(w){ return '<li>' + escapeHtml(w) + '</li>'; }).join('') + '</ul>';
+    } else {
+      warn.className = 'alert alert-ok';
+      warn.textContent = 'No clearance issues detected — doors and windows are clear.';
+    }
+
+    drawBlueprint($('blueprintPreview'), room, layout);
+
+    $('modStyle').value = room.style;
+    $('modBudget').value = room.budget;
+    setChips('modFurnitureChips', room.required_furniture || []);
+  }
+
+  function renderRenderResult(result){
+    const el = $('renderResult');
+    const cls = { ok:'status-ok', error:'status-error', not_configured:'status-muted' }[result.status] || 'status-muted';
+    let extra = '';
+    if(result.status === 'not_configured'){
+      extra = '<p class="hint">No external 3D render provider is configured on the backend (DECORA_RENDER_API_URL / DECORA_RENDER_API_KEY). That is expected for a local demo — the prompt above is exactly what would be sent to a provider such as Stability, Replicate, or Meshy once configured.</p>';
+    } else if(result.status === 'error'){
+      extra = '<p class="hint">' + escapeHtml(result.message || '') + '</p>';
+    } else if(result.status === 'ok'){
+      extra = '<pre class="mono-block">' + escapeHtml(JSON.stringify(result.provider_response, null, 2)) + '</pre>';
+    }
+    el.innerHTML = '<span class="status-badge ' + cls + '">' + result.status.replace(/_/g,' ') + '</span>' + extra;
+  }
+
+  function renderFinalSummary(data){
+    $('finalSummary').innerHTML =
+      '<dl class="summary-grid">' +
+      '<dt>Session ID</dt><dd class="mono">' + escapeHtml(data.session_id) + '</dd>' +
+      '<dt>Stage</dt><dd>' + escapeHtml(data.stage) + '</dd>' +
+      '<dt>Layout</dt><dd>' + escapeHtml((data.current_layout && data.current_layout.name) || '—') + '</dd>' +
+      '<dt>Style</dt><dd>' + escapeHtml(data.room_input.style) + '</dd>' +
+      '<dt>Estimated cost</dt><dd>' + formatNpr(data.current_layout && data.current_layout.estimated_cost) + '</dd>' +
+      '<dt>Match score</dt><dd>' + Math.round(((data.current_layout && data.current_layout.match_score) || 0) * 100) + '%</dd>' +
+      '</dl>';
+    $('rawJson').textContent = JSON.stringify(data, null, 2);
+  }
+
+  /* ---------------- central state application ---------------- */
+  function applyState(data){
+    session = data;
+    const level = STAGE_RANK[data.stage] || 1;
+
+    if(data.current_layout){ renderLayoutResults(data.current_layout, data.room_input); }
+
+    setUnlocked('card-2', level >= 2);
+    setUnlocked('card-3', level >= 2);
+    setUnlocked('card-4', level >= 3);
+    setUnlocked('card-5', level >= 4);
+    setUnlocked('card-6', level >= 5);
+
+    markDone('card-1', true);
+    markDone('card-2', level >= 2);
+    markDone('card-3', level >= 3);
+    markDone('card-4', level >= 4);
+    markDone('card-5', level >= 5);
+    markDone('card-6', level >= 5);
+
+    const fpWrap = $('floorplanWrap');
+    if(level >= 3){
+      $('floorplanImg').src = apiBase() + '/api/design/' + data.session_id + '/floorplan?t=' + Date.now();
+      fpWrap.hidden = false;
+    } else {
+      fpWrap.hidden = true;
+    }
+
+    if(data.render_prompt){
+      $('renderPromptWrap').hidden = false;
+      $('renderPrompt').textContent = data.render_prompt;
+    }
+
+    if(level >= 5){ renderFinalSummary(data); }
+  }
+
+  /* ---------------- connection check ---------------- */
+  async function checkConnection(){
+    const dot = $('connDot'), msg = $('connMsg');
+    try{
+      const data = await api('/api/layouts/seed-info');
+      dot.className = 'dot ok';
+      msg.textContent = data.count + ' layouts loaded';
+      $('datasetNote').textContent = data.count + ' seeded layouts, scored live against your room, style and budget.';
+    } catch(e){
+      dot.className = 'dot bad';
+      msg.textContent = 'not reachable — check the API endpoint above';
+      $('datasetNote').textContent = 'not connected yet.';
+    }
+  }
+
+  /* ---------------- form building ---------------- */
+  function buildRoomInput(){
+    const length = parseFloat($('roomLength').value);
+    const width = parseFloat($('roomWidth').value);
+    const budget = parseInt($('budget').value, 10);
+    if(!(length > 0) || !(width > 0)){
+      showError('formError', 'Length and width must both be greater than 0.');
+      return null;
+    }
+    if(Number.isNaN(budget) || budget < 0){
+      showError('formError', 'Enter a valid budget.');
+      return null;
+    }
+    return {
+      length: length,
+      width: width,
+      room_type: $('roomType').value,
+      style: $('style').value,
+      budget: budget,
+      required_furniture: readChips('furnitureChips'),
+      doors: readOpenings('doorsContainer'),
+      windows: readOpenings('windowsContainer')
+    };
+  }
+
+  /* ---------------- event wiring ---------------- */
+  function wireEvents(){
+    $('roomType').addEventListener('change', function(){
+      $('roomTypeHint').hidden = ($('roomType').value === 'bedroom');
+    });
+
+    $('btnAddDoor').addEventListener('click', function(){ addOpeningRow('doorsContainer'); });
+    $('btnAddWindow').addEventListener('click', function(){ addOpeningRow('windowsContainer'); });
+
+    $('roomForm').addEventListener('submit', async function(e){
+      e.preventDefault();
+      clearAlert('formError');
+      const room = buildRoomInput();
+      if(!room) return;
+      setLoading('btnGenerate', true);
+      try{
+        const data = await api('/api/design', { method:'POST', body: JSON.stringify(room) });
+        applyState(data);
+        scrollToCard('card-2');
+      } catch(err){
+        showError('formError', err.message);
+      } finally {
+        setLoading('btnGenerate', false);
+      }
+    });
+
+    $('btnModify').addEventListener('click', async function(){
+      if(!session) return;
+      clearAlert('modifyError');
+      const payload = {
+        style: $('modStyle').value,
+        budget: parseInt($('modBudget').value, 10),
+        required_furniture: readChips('modFurnitureChips')
+      };
+      setLoading('btnModify', true);
+      try{
+        const data = await api('/api/design/' + session.session_id + '/modify', { method:'POST', body: JSON.stringify(payload) });
+        applyState(data);
+        scrollToCard('card-2');
+      } catch(err){
+        showError('modifyError', err.message);
+      } finally {
+        setLoading('btnModify', false);
+      }
+    });
+
+    $('btnAccept').addEventListener('click', async function(){
+      if(!session) return;
+      clearAlert('verifyError');
+      setLoading('btnAccept', true);
+      try{
+        const data = await api('/api/design/' + session.session_id + '/accept', { method:'POST' });
+        applyState(data);
+        scrollToCard('card-4');
+      } catch(err){
+        showError('verifyError', err.message);
+      } finally {
+        setLoading('btnAccept', false);
+      }
+    });
+
+    async function doVerify(approved){
+      if(!session) return;
+      clearAlert('verifyError');
+      const btnId = approved ? 'btnApprove' : 'btnReject';
+      setLoading(btnId, true);
+      try{
+        const data = await api('/api/design/' + session.session_id + '/verify?approved=' + approved, { method:'POST' });
+        applyState(data);
+        if(!approved){
+          showInfo('verifyError', 'Changes requested — adjust the layout in Feedback Core above, then accept again.');
+          scrollToCard('card-3');
+        } else {
+          scrollToCard('card-5');
+        }
+      } catch(err){
+        showError('verifyError', err.message);
+      } finally {
+        setLoading(btnId, false);
+      }
+    }
+    $('btnApprove').addEventListener('click', function(){ doVerify(true); });
+    $('btnReject').addEventListener('click', function(){ doVerify(false); });
+
+    $('btnRender3d').addEventListener('click', async function(){
+      if(!session) return;
+      clearAlert('render3dError');
+      setLoading('btnRender3d', true);
+      try{
+        const data = await api('/api/design/' + session.session_id + '/render3d', { method:'POST' });
+        applyState(data.session);
+        renderRenderResult(data.render_result);
+        scrollToCard('card-6');
+      } catch(err){
+        showError('render3dError', err.message);
+      } finally {
+        setLoading('btnRender3d', false);
+      }
+    });
+
+    $('btnReset').addEventListener('click', function(){
+      session = null;
+      $('roomForm').reset();
+      renderChipOptions('furnitureChips', DEFAULT_FURNITURE);
+      $('doorsContainer').innerHTML = '';
+      addOpeningRow('doorsContainer', { wall:'north', position:3, width:3 });
+      $('windowsContainer').innerHTML = '';
+      addOpeningRow('windowsContainer', { wall:'south', position:2, width:3 });
+      ['card-2','card-3','card-4','card-5','card-6'].forEach(function(id){ setUnlocked(id, false); markDone(id, false); });
+      markDone('card-1', false);
+      ['formError','modifyError','verifyError','render3dError'].forEach(clearAlert);
+      $('renderPromptWrap').hidden = true;
+      $('renderResult').innerHTML = '';
+      window.scrollTo({ top: 0, behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+    });
+
+    $('apiBase').addEventListener('change', checkConnection);
+  }
+
+  /* ---------------- init ---------------- */
+  document.addEventListener('DOMContentLoaded', function(){
+    $('stampDate').textContent = new Date().toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' });
+    renderChipOptions('furnitureChips', DEFAULT_FURNITURE);
+    renderChipOptions('modFurnitureChips', DEFAULT_FURNITURE);
+    addOpeningRow('doorsContainer', { wall:'north', position:3, width:3 });
+    addOpeningRow('windowsContainer', { wall:'south', position:2, width:3 });
+    wireEvents();
+    checkConnection();
+  });
+})();
+</script>
+</body>
+</html>
