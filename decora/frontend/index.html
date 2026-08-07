@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="0" />
+<title>Decora — Layout Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <header class="titleblock">
+    <div class="titleblock-inner">
+      <div class="wordmark">
+        <h1>DECORA</h1>
+        <p>AI Layout &amp; Furniture Placement Engine</p>
+      </div>
+      <div class="stampgrid">
+        <div class="stampcell"><span class="k">Sheet</span><span class="v">01 / Bedroom</span></div>
+        <div class="stampcell"><span class="k">Stage</span><span class="v" id="stampStage">Input Capture</span></div>
+        <div class="stampcell"><span class="k">Dataset</span><span class="v" id="stampDataset">— check —</span></div>
+        <div class="stampcell">
+          <span class="k">Server</span>
+          <input id="apiBase" class="v" type="text" value="http://localhost:8000" spellcheck="false" aria-label="Backend server URL" />
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="stepper" id="stepper" aria-label="Design workflow progress">
+    <div class="step" data-stage="input"><span class="n">1</span> Input Capture</div>
+    <div class="step" data-stage="layout"><span class="n">2</span> Furniture Recommendation</div>
+    <div class="step" data-stage="feedback"><span class="n">3</span> Layout Engine</div>
+    <div class="step" data-stage="visualization"><span class="n">4</span> 2D Visualization</div>
+    <div class="step" data-stage="render3d"><span class="n">5</span> 3D Upscaling</div>
+    <div class="step" data-stage="complete"><span class="n">6</span> Final Output</div>
+  </nav>
+
+  <main class="sheet">
+
+    <!-- ============ LEFT: SPEC SHEET / FORM ============ -->
+    <section class="panel">
+      <p class="eyebrow">Section 01</p>
+      <h2>Room Specification</h2>
+
+      <form id="roomForm" novalidate action="javascript:void(0)" onsubmit="event.preventDefault(); return false;">
+        <div class="row">
+          <div>
+            <h2> <label for="length">Length</label> </h2>
+            <div class="unit-input"><input id="length" type="number" min="1" step="0.25" value="11" required /><span class="unit">ft</span></div>
+          </div>
+          <div>
+             <h2><label for="width">Width</label></h2>
+            <div class="unit-input"><input id="width" type="number" min="1" step="0.25" value="10" required /><span class="unit">ft</span></div>
+          </div>
+        </div>
+        <p class="note" style="margin-top:4px;">Width can equal length, but not exceed length.</p>
+        <h2><label for="style">Style</label></h2>
+        <select id="style">
+          <option value="standard" selected>Standard</option>
+          <option value="luxury">Luxury</option>
+          <option value="budget">Budget</option>
+        </select>
+
+        <h2> <label for="roomType">Room type</label> </h2>
+        <select id="roomType">
+          <option value="bedroom" selected>Bedroom</option>
+        </select>
+        <p class="note" style="margin-top:4px;">For now Decora can only work on bedroom. <br>We will expand to other room types in the future.</p>
+
+        <div class="unit-input">
+          <label for="budget">Budget</label>
+          <input id="budget" type="number" min="0" step="500" value="15000" required />
+          <span class="unit" style="top:66%;">NPR</span>
+        </div>
+
+        <h2><label>Required furniture</label></h2>
+        <div class="furngrid" id="furnitureGroup"><!-- populated by buildFurnitureGroup() --></div>
+        <p class="note" style="margin-top:4px;">Tick a category, then pick the exact size/type you want. Untouched categories are left to the recommendation model.</p>
+
+        <fieldset>
+        <div class="dimguide" aria-hidden="true">
+        <img src="room-dimension-guide.png" alt="Room dimension guide showing North, South, East, and West walls, with length and width labeled on the outer edges." />
+        </div>
+         <h2> <legend>Door</legend></h2>
+          <div class="checkline">
+            <input id="doorOn" type="checkbox" checked />
+            <label for="doorOn">Include a door opening</label>
+          </div>
+          <div class="row">
+            <div>
+              <label for="doorWall">Wall</label>
+              <select id="doorWall">
+                <option value="north">North</option>
+                <option value="south" selected>South</option>
+                <option value="east">East</option>
+                <option value="west">West</option>
+              </select>
+            </div>
+            <div>
+              <label for="doorCorner">Corner</label>
+              <select id="doorCorner">
+                <option value="left" selected>Left corner</option>
+                <option value="right">Right corner</option>
+              </select>
+            </div>
+          </div>
+          <p class="note" style="margin-top:6px;">Position along the wall is set automatically from the corner you pick.</p>
+        </fieldset>
+
+        <fieldset>
+         <h2> <legend>Windows</legend></h2>
+          <div class="checkline">
+            <input id="windowOn" type="checkbox" checked />
+            <label for="windowOn">Include window openings</label>
+          </div>
+          <div id="windowControls">
+            <label for="windowCount">Number of windows</label>
+            <select id="windowCount">
+              <option value="1" selected>1</option>
+              <option value="2">2</option>
+            </select>
+
+            <label for="windowWall1" id="windowWall1Label">Wall</label>
+            <select id="windowWall1">
+              <option value="north" selected>North</option>
+              <option value="south">South</option>
+              <option value="east">East</option>
+              <option value="west">West</option>
+            </select>
+
+            <div id="windowRow2" hidden>
+              <label for="windowWall2">Window 2 wall</label>
+              <select id="windowWall2">
+                <option value="north">North</option>
+                <option value="south" selected>South</option>
+                <option value="east">East</option>
+                <option value="west">West</option>
+              </select>
+            </div>
+            <p class="note" style="margin-top:6px;">Each window is centered on its wall automatically. With two windows, they can't share the same wall.</p>
+          </div>
+        </fieldset>
+
+        <div class="btnrow">
+          <button type="button" id="getSuggestionBtn" class="accent">Get Suggestions</button>
+        </div>
+      </form>
+
+      <!-- Feedback Core -->
+      <div class="stagebox" id="feedbackBox" hidden>
+        <h3>Section 03 — Feedback Core</h3>
+        <p class="note">Adjust and re-run the Layout Engine without starting a new session.</p>
+        <label for="fbStyle">Style</label>
+        <select id="fbStyle">
+          <option value="standard">Standard</option>
+          <option value="luxury">Luxury</option>
+          <option value="budget">Budget</option>
+        </select>
+        <label for="fbBudget">Budget (NPR)</label>
+        <input id="fbBudget" type="number" min="0" step="500" />
+        <div class="btnrow">
+          <button type="button" class="secondary" id="modifyBtn">Modify &amp; Re-run</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ RIGHT: DRAWING SHEET / RESULTS ============ -->
+    <section class="panel drawing">
+      <span class="cm2" aria-hidden="true"></span><span class="cm3" aria-hidden="true"></span>
+      <p class="eyebrow">Section 02 — Furniture Recommendation </p>
+
+      <div id="results">
+        <div class="empty">No layout generated yet. Fill in the room specification and select&nbsp;<b>Get Suggestion</b>.</div>
+      </div>
+
+      <div id="errorBanner"></div>
+
+      <!-- 2D Visualization -->
+      <div class="stagebox" id="visBox" hidden>
+        <h3>Section 04 — 2D Visualization &amp; Verification</h3>
+        <div class="btnrow">
+          <button type="button" class="secondary" id="changeLayoutBtn" hidden>Change Layout</button>
+          <button type="button" class="secondary" id="acceptBtn">Accept Layout &amp; Generate Floor Plan</button>
+        </div>
+        <p class="note" id="changeLayoutNote"></p>
+        <div class="floorplan-wrap" id="floorplanWrap" hidden>
+          <img id="floorplanImg" alt="Generated 2D floor plan" />
+        </div>
+        <div class="btnrow" id="verifyRow" hidden>
+          <button type="button" id="approveBtn">Approve Floor Plan</button>
+          <button type="button" class="secondary" id="rejectBtn">Send Back for Changes</button>
+        </div>
+        <p class="note" id="verifyNote"></p>
+      </div>
+
+      <!-- 3D Upscaling -->
+      <div class="stagebox" id="render3dBox" hidden>
+        <h3>Section 05 — 3D Upscaling</h3>
+        <div>
+        <p class="note" style="margin-top:4px;"> 3D rendering will be available soon. <br> The generated 3D image will be displayed here once available.</p></code>
+        </div>
+        <p class="note" id="render3dNote"></p>
+      </div>
+
+      <!-- Final Output -->
+      <div class="stagebox" id="finalBox" hidden>
+        <h3>Section 06 — Final Output</h3>
+        <p class="note ok">Design session complete.</p>
+        <details>
+          <summary class="note" style="cursor:pointer;">View full session JSON</summary>
+          <pre class="mono" id="finalJson" style="font-size:11.5px; overflow:auto; background:var(--paper); padding:10px; border:1px solid rgba(16,57,90,0.2); margin-top:8px;"></pre>
+        </details>
+      </div>
+    </section>
+
+  </main>
+
+  <details class="revlog">
+    <summary>Revision log — raw API calls (<span id="revCount">0</span>)</summary>
+    <table class="revtable">
+      <thead><tr><th style="width:52px;">Rev</th><th>Request</th><th style="width:70px;">Status</th><th style="width:90px;">Time</th></tr></thead>
+      <tbody id="revBody"></tbody>
+    </table>
+  </details>
+
+  <footer>Designed by Team Decora.</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
